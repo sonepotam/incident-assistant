@@ -1,0 +1,2 @@
+After the auth-service release at 14:10 UTC, web and mobile users get logged out and cannot log back in.
+401 rate on api-gateway jumped from 0.2% to 30%. Logs: "token signature verification failed".

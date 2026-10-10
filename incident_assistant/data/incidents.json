@@ -1,0 +1,26 @@
+[
+  {
+    "id": "INC-101",
+    "category": "External payment provider issue",
+    "services": ["payment-service"],
+    "text": "Customers report that they cannot pay by card. In payment-service logs we see massive timeouts when calling the PayGate provider. The issue started around 12:05 UTC. No other metric anomalies were noticed."
+  },
+  {
+    "id": "INC-102",
+    "category": "DB degradation caused by reporting",
+    "services": ["payment-service", "reporting-service", "api-gateway"],
+    "text": "Sharp increase in response time for /payments/create (up to 5-7 seconds). DB dashboards show high CPU and many long-running queries from reporting-service. Some customers receive 504 Gateway Timeout from api-gateway."
+  },
+  {
+    "id": "INC-103",
+    "category": "Notification delivery issue",
+    "services": ["notification-service", "billing-service"],
+    "text": "Users do not receive top-up confirmation e-mails. Money is credited successfully, balances are correct. In notification-service logs there are intermittent connection errors to the SMTP provider."
+  },
+  {
+    "id": "INC-104",
+    "category": "User authentication errors",
+    "services": ["auth-service"],
+    "text": "Some customers cannot log in via the mobile app. auth-service responds with 401 errors. Logs show messages about invalid token signatures. No large-scale failures in other services."
+  }
+]

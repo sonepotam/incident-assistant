@@ -1,0 +1,32 @@
+{
+  "category": "Other",
+  "summary": "Several merchants have received two identical invoices for the same billing period, starting after yesterday's billing-service deploy. There are no errors and CPU and latency are normal, which points to a logic regression rather than an infrastructure problem. Merchants are at risk of being double-billed, so money data may be wrong.",
+  "severity": "high",
+  "hypotheses": [
+    {
+      "title": "Deploy regression in billing-service invoice generation (missing idempotency or duplicate trigger)",
+      "reasoning": "Duplicates began right after the billing-service deploy, and nothing else shows degradation (no errors, normal CPU and latency). This fits a code or config change that removed or broke a duplicate-invoice guard, or that triggers invoice generation twice for the same period, for example a scheduler registered twice or a changed job key.",
+      "next_steps": [
+        "Diff the latest billing-service release against the previous one, focusing on invoice generation, scheduling and any idempotency or unique-key logic.",
+        "Query the billing PostgreSQL instance for invoices grouped by merchant and billing period having count > 1, and compare their created_at timestamps with the deploy time to confirm the scope and that all duplicates appear after the deploy.",
+        "Check whether a unique constraint or index on (merchant, period) existed before the deploy and whether a migration in the release dropped or altered it."
+      ]
+    },
+    {
+      "title": "Multiple billing-service instances running the invoicing job concurrently",
+      "reasoning": "If the deploy changed how the invoicing job is scheduled (e.g. new replicas, a lost leader lock, or an old and a new version running side by side), each instance could generate the same invoices independently without any errors or load anomalies.",
+      "next_steps": [
+        "In ELK, filter billing-service logs by instance/pod and search for invoice-generation job start entries around the invoicing time. Look for the same job being started by more than one instance or process.",
+        "Check the billing-service deployment state to see whether old and new versions overlapped or the replica count changed, and verify that the scheduler lock mechanism still works."
+      ]
+    },
+    {
+      "title": "Retry or re-processing of invoice generation after a partial failure",
+      "reasoning": "The deploy could have changed retry or message-handling behavior, so a job or event is re-processed and creates a second invoice. This would also produce no visible errors if the retry is treated as normal flow.",
+      "next_steps": [
+        "In ELK, search billing-service logs for retry, redelivery or re-queue messages related to invoice creation for the affected merchants' IDs.",
+        "For a few affected merchants, compare the two invoice records in the billing PostgreSQL instance (IDs, timestamps, source or trigger fields) to see whether they were created by the same run or by separate runs."
+      ]
+    }
+  ]
+}

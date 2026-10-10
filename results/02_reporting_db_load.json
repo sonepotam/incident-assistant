@@ -1,0 +1,32 @@
+{
+  "category": "DB degradation caused by reporting",
+  "summary": "Since 09:40 UTC, /payments/create has been slow (4-8 s) and api-gateway returns 504 on a portion of requests. The payment DB CPU is at 95%, starting shortly after the month-end export job in reporting-service began at 09:35. Customers creating payments are affected, which is a core money flow that is badly degraded.",
+  "severity": "high",
+  "hypotheses": [
+    {
+      "title": "Month-end export queries from reporting-service are saturating the payment PostgreSQL instance",
+      "reasoning": "The export job started at 09:35, five minutes before latency began at 09:40, and payment DB CPU is at 95%. payment-service is known to slow down when its PostgreSQL instance is overloaded, and api-gateway returns 504 when upstreams respond too slowly. The pattern closely matches INC-102.",
+      "next_steps": [
+        "On the payment PostgreSQL instance, query pg_stat_activity for long-running active queries and check whether they originate from the reporting-service user/application name and started around 09:35",
+        "Compare the payment DB CPU graph with the export job start time, and check for lock waits (pg_locks / blocked queries) involving payment tables",
+        "In ELK, search reporting-service logs from 09:35 for the month-end export job and the queries it runs, to confirm it targets the payment instance rather than a replica or the billing instance"
+      ]
+    },
+    {
+      "title": "Payment DB overload from a different source (not reporting), such as a slow-query regression or connection pool exhaustion in payment-service",
+      "reasoning": "High DB CPU and slow /payments/create are also consistent with a non-reporting cause, such as a new or unindexed query or a connection spike. The timing correlation with the export job is strong but not proof, so this needs to be ruled out.",
+      "next_steps": [
+        "Using pg_stat_statements on the payment instance, rank queries by total time and check whether the top consumers belong to payment-service or to reporting-service",
+        "In ELK, check payment-service logs since 09:40 for DB timeouts, pool exhaustion or connection errors, and check whether a deploy or config change happened shortly before 09:40"
+      ]
+    },
+    {
+      "title": "External payment provider (PayGate) slowness is contributing to latency and 504s",
+      "reasoning": "payment-service depends on external providers, and provider timeouts could also produce slow /payments/create calls and gateway 504s. However, the report shows no provider errors, and the 95% DB CPU is better explained by the DB hypotheses, so this is the least likely.",
+      "next_steps": [
+        "In ELK, filter payment-service logs since 09:40 for PayGate call durations, timeouts and 5xx errors, and compare them with the time spent in DB calls",
+        "Check the PayGate status page for incidents or degraded performance starting around 09:40 UTC"
+      ]
+    }
+  ]
+}

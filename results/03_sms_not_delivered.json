@@ -1,0 +1,33 @@
+{
+  "category": "Notification delivery issue",
+  "summary": "notification-service is failing about 40% of SMS sends because the external SMS provider returns 503, while e-mail works normally. Users confirming payments do not receive SMS one-time codes in a portion of cases, so some cannot complete payment confirmation.",
+  "severity": "medium",
+  "hypotheses": [
+    {
+      "title": "External SMS provider outage or degradation",
+      "reasoning": "The logs show 'SMS provider returned 503' on roughly 40% of sends, while e-mail through the separate SMTP provider is healthy. This points to a partial failure on the SMS provider side rather than a general notification-service fault. notification-service is known to degrade when external SMS providers have issues.",
+      "next_steps": [
+        "Check the SMS provider's status page and any incident notices, and open a support ticket if there is an ongoing issue.",
+        "Query notification-service logs in ELK for 'SMS provider returned 503' over time to find when failures started and whether the rate is steady or growing.",
+        "Break down the 503 responses by SMS destination country, carrier or provider endpoint to see whether the failures are concentrated in one route."
+      ]
+    },
+    {
+      "title": "Rate limiting or throttling by the SMS provider, or an exhausted quota",
+      "reasoning": "A partial failure rate of about 40% is consistent with the provider shedding load or throttling this account, for example during peak payment traffic, rather than a full outage. The 503 could be how the provider signals overload for our traffic.",
+      "next_steps": [
+        "Compare the SMS send volume from notification-service with the provider's account dashboard for rate limits, quota or balance.",
+        "Check in ELK whether 503s correlate with traffic peaks and whether response bodies or headers contain Retry-After or throttling hints.",
+        "Check whether notification-service retries failed sends aggressively, which could amplify the load, by looking at retry counts per message in its logs."
+      ]
+    },
+    {
+      "title": "Recent change in notification-service SMS integration or configuration",
+      "reasoning": "The start time is unknown, so a recent deploy or config change (provider endpoint, credentials, request format, retry or timeout settings) cannot be ruled out. This is less likely because the errors are 503 responses from the provider and the failures are partial rather than total.",
+      "next_steps": [
+        "Review the deploy and config change history for notification-service around the time failures first appeared in ELK.",
+        "Check whether the failures are limited to specific notification-service instances or pods by grouping the 503 logs by host."
+      ]
+    }
+  ]
+}

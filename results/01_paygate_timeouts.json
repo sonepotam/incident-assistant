@@ -1,0 +1,34 @@
+{
+  "category": "External payment provider issue",
+  "summary": "Since 12:05 UTC payment-service has been hitting many timeouts when calling PayGate, so card payments frequently fail and transactions do not complete. Customers trying to pay by card are affected, and other services appear normal.",
+  "severity": "high",
+  "hypotheses": [
+    {
+      "title": "PayGate outage or degradation on the provider side",
+      "reasoning": "Timeouts are specifically on calls to PayGate, they began at a clear point (12:05 UTC), and other services look normal. This matches the known risk of external provider errors for payment-service and the pattern of a similar past incident (INC-101).",
+      "next_steps": [
+        "Check the PayGate status page and any provider incident notifications or support channels for an outage starting around 12:05 UTC",
+        "In ELK, query payment-service logs from 12:00 UTC for PayGate calls and compare the timeout rate with the pre-12:05 baseline, noting whether any calls still succeed and whether 5xx responses or only timeouts appear",
+        "Confirm whether timeouts are spread across all PayGate endpoints and all payment-service instances, which would point to the provider rather than a local fault"
+      ]
+    },
+    {
+      "title": "Network or connectivity problem between payment-service and PayGate",
+      "reasoning": "Timeouts without other service errors can also be caused by egress network issues, DNS resolution problems, or a firewall/proxy change on the path from our platform to PayGate, even if PayGate itself is healthy.",
+      "next_steps": [
+        "From a payment-service host or pod, run connectivity checks (DNS lookup, TCP connect, TLS handshake timing) to the PayGate endpoint and compare with the PayGate status",
+        "In ELK, check payment-service logs for connect timeouts or DNS/TLS errors versus read timeouts to distinguish a network failure from a slow provider response",
+        "Check whether any network, proxy or firewall changes were deployed around 12:05 UTC"
+      ]
+    },
+    {
+      "title": "Payment-service side resource problem, such as PostgreSQL payment instance overload or exhausted HTTP client pool",
+      "reasoning": "payment-service is known to slow down when its PostgreSQL instance is overloaded, and a saturated thread or connection pool can surface as timeouts. This is less likely because other services look normal and the logs point to PayGate calls, but it should be ruled out.",
+      "next_steps": [
+        "Check CPU, active connections, lock waits and long-running queries on the payment PostgreSQL instance since 12:05 UTC, including any reporting-service queries",
+        "Review payment-service metrics for HTTP client pool usage, thread saturation, and latency of DB calls versus PayGate calls",
+        "Check whether a payment-service deploy or config change occurred around 12:05 UTC"
+      ]
+    }
+  ]
+}

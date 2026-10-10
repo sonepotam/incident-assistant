@@ -1,0 +1,33 @@
+{
+  "category": "External payment provider issue",
+  "summary": "Card payments are failing because payment-service is hitting mass timeouts when calling PayGate, starting at 12:05 UTC. All customers attempting to pay by card are likely affected, while other services appear healthy.",
+  "severity": "high",
+  "hypotheses": [
+    {
+      "title": "PayGate outage or degradation on the provider side",
+      "reasoning": "The report shows mass timeouts specifically on calls to PayGate beginning at a clear start time (12:05 UTC), while other services work normally. This pattern points to the external provider being slow or unavailable rather than a platform-wide problem.",
+      "next_steps": [
+        "Check the PayGate status page and any provider incident notices or support channel for an outage starting around 12:05 UTC",
+        "In ELK, query payment-service logs from 12:00 UTC onward for PayGate calls and compare the timeout rate and response latency before and after 12:05 UTC",
+        "Check whether timeouts affect all PayGate endpoints and all merchants or only specific operations (e.g. authorize vs. capture)"
+      ]
+    },
+    {
+      "title": "Network connectivity or egress problem between payment-service and PayGate",
+      "reasoning": "Timeouts can also come from our side of the path (DNS, firewall, NAT/egress, TLS handshake) rather than PayGate itself. Other services are working, but they may not use the same egress route to PayGate, so this cannot be ruled out from the report alone.",
+      "next_steps": [
+        "From a payment-service host/pod, run a direct request to the PayGate endpoint and measure DNS resolution, TCP connect and TLS handshake time to see where it stalls",
+        "In ELK, check whether the payment-service timeouts are connect timeouts or read timeouts, and whether they occur on all payment-service instances or only some",
+        "Review recent network, firewall or egress/proxy changes around 12:05 UTC"
+      ]
+    },
+    {
+      "title": "Recent change in payment-service (deploy or config) affecting PayGate calls",
+      "reasoning": "A deploy or config change, such as a lowered timeout, changed endpoint URL, or a connection pool setting, could cause mass timeouts starting at a precise time. The report does not mention a deploy, so this is less likely but worth ruling out.",
+      "next_steps": [
+        "Check the deploy and config change history for payment-service around 12:05 UTC, including PayGate timeout, URL and credentials settings",
+        "If a recent release exists, compare the PayGate client configuration with the previous version and consider a rollback test on a single instance"
+      ]
+    }
+  ]
+}

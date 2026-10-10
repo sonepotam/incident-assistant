@@ -1,0 +1,3 @@
+Customers complain that card payments often fail, and transactions do not go through.
+payment-service logs show many timeouts when calling PayGate, starting from 12:05 UTC.
+Other services look normal.

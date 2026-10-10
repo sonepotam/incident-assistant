@@ -1,0 +1,2 @@
+Several merchants report they received two identical invoices for the same period.
+No errors in logs, billing-service CPU and latency are normal. It started after yesterday's billing-service deploy.

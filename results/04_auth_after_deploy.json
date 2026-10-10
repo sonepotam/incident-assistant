@@ -1,0 +1,34 @@
+{
+  "category": "User authentication errors",
+  "summary": "Since the auth-service release at 14:10 UTC, tokens are failing signature verification, and the api-gateway 401 rate rose from 0.2% to 30%. Web and mobile users are being logged out and cannot log back in, so a core access flow is broken for many customers.",
+  "severity": "high",
+  "hypotheses": [
+    {
+      "title": "Signing key or key configuration changed in the auth-service release",
+      "reasoning": "The failures started right after the 14:10 UTC release, and the logs say 'token signature verification failed'. This points to tokens being signed with a different key, algorithm or key ID than the one used to verify them. That would invalidate existing sessions (the logouts) and could also break newly issued tokens (the failed re-logins).",
+      "next_steps": [
+        "Compare the auth-service signing key, key ID and algorithm configuration between the previous and the new release, and check the deploy diff for secret or config changes.",
+        "Query ELK for auth-service logs from 14:10 UTC onward and check whether newly issued tokens fail verification immediately, or only tokens issued before the release.",
+        "Decode the header of a failing token (without logging its contents) and compare its kid/alg with the keys currently published or configured for verification."
+      ]
+    },
+    {
+      "title": "Instance or key mismatch during rollout: only some auth-service instances run the new key or config",
+      "reasoning": "A 30% 401 rate rather than near 100% suggests partial failure. A partially completed or inconsistent rollout, where some instances sign with one key and others verify with another, would explain this. It would also explain why some users can still authenticate.",
+      "next_steps": [
+        "In ELK, group 'token signature verification failed' errors by auth-service instance or pod and by version to see whether failures are concentrated on specific instances.",
+        "Check the rollout status and confirm that all auth-service instances run the same release and load the same signing keys.",
+        "Check whether api-gateway has its own cached verification keys or JWKS, and whether its cache refresh time matches the 14:10 UTC release."
+      ]
+    },
+    {
+      "title": "Regression in token issuance or validation code in the new release, unrelated to key configuration",
+      "reasoning": "The release may have changed how tokens are built or validated (claims, encoding, serialization), so valid tokens fail the signature check even though the keys are unchanged. This differs from a key problem because the same keys would still be in use.",
+      "next_steps": [
+        "Review the release changelog and diff for changes to token generation, serialization or validation libraries.",
+        "Roll back auth-service to the previous version in a staging or canary environment and check whether login and token verification succeed, which would confirm the release as the cause.",
+        "Compare the ELK error stack traces from auth-service before and after 14:10 UTC to find new exception types."
+      ]
+    }
+  ]
+}

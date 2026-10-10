@@ -1,0 +1,2 @@
+Users say they do not get SMS with one-time codes when confirming a payment.
+notification-service logs: "SMS provider returned 503" for about 40% of sends. E-mails are fine.

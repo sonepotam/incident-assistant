@@ -1,0 +1,51 @@
+{
+  "platform": "Payment platform",
+  "general_notes": [
+    "All services write logs to a centralized log storage (ELK).",
+    "The main database is PostgreSQL, with separate instances for payment-service and billing-service.",
+    "Payments often experience external provider errors (timeout, 5xx, invalid credentials).",
+    "notification-service may degrade when external SMTP/SMS providers have issues.",
+    "reporting-service puts extra load on the DB with long analytical queries."
+  ],
+  "services": [
+    {
+      "name": "api-gateway",
+      "description": "Receives external HTTP requests from clients and routes them to internal services.",
+      "dependencies": ["auth-service", "payment-service", "billing-service", "notification-service", "reporting-service"],
+      "known_risks": ["Returns 504 Gateway Timeout when an upstream service responds too slowly."]
+    },
+    {
+      "name": "auth-service",
+      "description": "Authentication and token issuance.",
+      "dependencies": [],
+      "known_risks": ["401 errors / invalid token signatures (see INC-104)."]
+    },
+    {
+      "name": "payment-service",
+      "description": "Creation and processing of payment transactions.",
+      "dependencies": ["PostgreSQL (payment instance)", "external payment providers (e.g. PayGate)"],
+      "known_risks": [
+        "External provider errors: timeout, 5xx, invalid credentials.",
+        "Slows down when its PostgreSQL instance is overloaded."
+      ]
+    },
+    {
+      "name": "billing-service",
+      "description": "Balance management and invoicing.",
+      "dependencies": ["PostgreSQL (billing instance)"],
+      "known_risks": []
+    },
+    {
+      "name": "notification-service",
+      "description": "Sending e-mail and SMS notifications.",
+      "dependencies": ["external SMTP provider", "external SMS provider"],
+      "known_risks": ["Degrades when external SMTP/SMS providers have issues."]
+    },
+    {
+      "name": "reporting-service",
+      "description": "Generating reports and exporting data.",
+      "dependencies": ["PostgreSQL"],
+      "known_risks": ["Long analytical queries put extra load on the DB (see INC-102)."]
+    }
+  ]
+}
