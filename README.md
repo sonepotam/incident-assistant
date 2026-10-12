@@ -5,8 +5,9 @@ machine-readable triage: category, summary, severity and up to 3 root-cause hypo
 next steps. The LLM is used as a controlled component inside a three-stage pipeline, with schema
 validation, auto-correction and regeneration on bad output.
 
-Interfaces: CLI and HTTP API (FastAPI). Providers: Anthropic, OpenAI (or any OpenAI-compatible
-endpoint, e.g. a local Ollama model), plus an offline `mock` provider for running without keys.
+Interfaces: CLI and HTTP API (FastAPI). Providers: Anthropic (tested), and an OpenAI-compatible adapter
+for OpenAI or a local model via Ollama / vLLM (implemented, not run in this evaluation), plus an offline
+`mock` provider for running without keys.
 
 ## Quick start
 
@@ -146,7 +147,7 @@ The "Expected" column was written before the first run and is left unchanged.
 |---|---|---|
 | `01` PayGate timeouts since 12:05 UTC, other services normal | External payment provider issue, high; PayGate-side degradation first | ✅ as expected; hypotheses: PayGate outage → egress/DNS/TLS path → payment-service DB or HTTP pool (marked "less likely") |
 | `02` slow `/payments/create`, 504 at gateway, month-end export at 09:35, payment DB CPU 95% | DB degradation caused by reporting, high; `pg_stat_activity`, correlate with export job | ✅ as expected; also uses the 09:35 → 09:40 timing and checks the export hits the payment instance, not a replica |
-| `03` SMS one-time codes not delivered, SMS provider 503 for ~40%, e-mail fine | Notification delivery issue, medium–high (blocks payment confirmation) | ⚠️ category ✅, severity **medium**: inside the expected range, but chosen for the wrong reason, see "What the evaluation changed"; hypotheses: provider outage → throttling/quota → own config change |
+| `03` SMS one-time codes not delivered, SMS provider 503 for ~40%, e-mail fine | Notification delivery issue, medium–high (blocks payment confirmation) | ✅ category as expected, high (first run before the scale fix: medium, see "What the evaluation changed"); hypotheses: provider outage → throttling caused by our own OTP/retry traffic → own config change |
 | `04` 401 rate 0.2% → 30% after auth-service release, "token signature verification failed" | User authentication errors, high; signing key/config mismatch from the release | ✅ as expected; also explains the partial 30% by an inconsistent rollout and checks the gateway JWKS cache |
 | `05` duplicate invoices after billing-service deploy, no errors | **Other** (must not be forced into a known category), medium–high (financial impact) | ✅ Other, high (first run before the scale fix: medium); hypotheses: broken idempotency → job running on two instances → retry/re-processing |
 | `06` same as 01, written in Russian | same as 01, answer in English | ✅ same category/severity, all text in English |
@@ -162,7 +163,9 @@ name concrete services and data sources of this system, and that hypotheses are 
   integrity is now `high` regardless of how many customers are affected (3 of 3 re-runs → `high`).
   On `03` the scale itself pointed to `medium`: its `medium` example said "confirmations not
   delivered", which does not distinguish an informational e-mail from a one-time code that blocks a
-  payment. The scale now separates the two; `03` was not re-run after this change.
+  payment. The scale now separates the two; after the change `03` → `high` (1 re-run). The re-run's
+  summary echoes the scale's wording ("a significant share of customers"), a reminder that the model
+  follows the scale literally, so the scale text is part of the product logic.
 - *Distinct hypotheses* (`prompts.py`). Runs of `05` produced two hypotheses that were the same cause
   in different words and repeated the same check. The prompt now requires different root causes,
   each with a step that rules it in or out against the others.
@@ -189,8 +192,10 @@ hypothesis wording and ordering of the weakest one are not.
 
 Simplified to fit ~3 hours:
 - Retrieval is lexical over 4 incidents; no embeddings or vector store (the interface allows swapping).
-- The "agent" is a fixed pipeline, not a planner choosing tools: predictable, cheap, easy to test.
-  Triage of an incident report doesn't need open-ended tool selection at this stage.
+- The agent is a custom orchestrator with fixed stages (parse → retrieve → generate), the structure
+  the assignment asks for. The model does not choose tools itself: for triage of one report the steps
+  are known in advance, and a fixed order keeps a run predictable, cheap (2 LLM calls) and testable.
+  A tool-using stage is listed under "With more time".
 - Language detection is a script-based heuristic (non-Latin letter ratio), not a language-ID model.
 - No real integrations (ELK, metrics, provider status pages); next steps tell the engineer what to check.
 - Synchronous, no caching, no auth on the API.
@@ -206,3 +211,8 @@ With more time:
 - Embedding retrieval over a real incident history with postmortems and resolutions.
 - Observability: token/latency/retry metrics per stage, structured logs, request IDs.
 - Calibrated severity using business signals (affected payment volume, error rate), not text only.
+
+## Notes
+
+Built with an AI coding assistant (Claude). I reviewed the code, ran and evaluated it on a real model,
+and decided on the changes described in "What the evaluation changed".
