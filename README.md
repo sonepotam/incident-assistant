@@ -5,9 +5,12 @@ machine-readable triage: category, summary, severity and up to 3 root-cause hypo
 next steps. The LLM is used as a controlled component inside a three-stage pipeline, with schema
 validation, auto-correction and regeneration on bad output.
 
-Interfaces: CLI and HTTP API (FastAPI). Providers: Anthropic (tested), and an OpenAI-compatible adapter
-for OpenAI or a local model via Ollama / vLLM (implemented, not run in this evaluation), plus an offline
-`mock` provider for running without keys.
+Interfaces: CLI and HTTP API (FastAPI). Providers: Anthropic (used for all results below), and an
+OpenAI-compatible adapter for OpenAI or a local model via Ollama / vLLM, plus an offline `mock` provider
+for running without keys. The adapter was checked with a local `qwen2.5:7b` through Ollama on examples 01 and 06
+(valid output on the first attempt, the Russian report answered in English, 45–80 s per incident).
+I chose a small 7B model because it has to run on a modest laptop CPU (16 GB RAM, no GPU);
+a larger model would be needed for answer quality comparable to Claude.
 
 ## Quick start
 
