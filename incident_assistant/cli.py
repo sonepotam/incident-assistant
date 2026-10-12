@@ -55,7 +55,7 @@ def main(argv: list[str] | None = None) -> int:
     except TriageError as exc:
         print(f"error: {exc}", file=sys.stderr)
         print(json.dumps(exc.trace, indent=2, ensure_ascii=False), file=sys.stderr)
-        return 2
+        return 1 if isinstance(exc.__cause__, LLMError) else 2
 
     print(outcome.result.model_dump_json(indent=2))
     if args.trace:

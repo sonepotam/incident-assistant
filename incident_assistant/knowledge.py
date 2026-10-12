@@ -73,20 +73,6 @@ class KnowledgeBase:
     def service_names(self) -> list[str]:
         return list(self._services)
 
-    '''
-    def similar_incidents(self, text: str, services: list[str], k: int = 2) -> list[ScoredIncident]:
-        query = tokenize(text)
-        scored = []
-        for inc in self.incidents:
-            lexical = sum(self._idf.get(t, 0.0) for t in query & self._incident_tokens[inc.id])
-            service_bonus = 0.5 * len(set(services) & set(inc.services))
-            score = lexical + service_bonus
-            if score > 0:
-                scored.append(ScoredIncident(inc, round(score, 2)))
-        scored.sort(key=lambda s: s.score, reverse=True)
-        return scored[:k]
-    '''
-
     def similar_incidents(
         self,
         text: str,

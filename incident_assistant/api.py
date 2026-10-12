@@ -31,8 +31,15 @@ class TriageRequest(BaseModel):
 
 
 @lru_cache(maxsize=1)
-def get_agent() -> IncidentAgent:
+def _build_agent() -> IncidentAgent:
     return IncidentAgent.from_settings(Settings.from_env())
+
+
+def get_agent() -> IncidentAgent:
+    try:
+        return _build_agent()
+    except LLMError as exc:  # e.g. API key not set: a configuration problem, not a server crash
+        raise HTTPException(status_code=503, detail={"error": str(exc)}) from exc
 
 
 @app.get("/health")
@@ -50,8 +57,8 @@ def triage(req: TriageRequest, debug: bool = False, agent: IncidentAgent = Depen
     try:
         outcome = agent.run(req.text)
     except TriageError as exc:
-        raise HTTPException(status_code=502, detail={"error": str(exc), "trace": exc.trace}) from exc
-    except LLMError as exc:
-        raise HTTPException(status_code=503, detail={"error": str(exc)}) from exc
+        # provider unreachable -> 503; provider answered but no valid triage within the retry budget -> 502
+        status = 503 if isinstance(exc.__cause__, LLMError) else 502
+        raise HTTPException(status_code=status, detail={"error": str(exc), "trace": exc.trace}) from exc
     result = outcome.result.model_dump()
     return {"result": result, "trace": outcome.trace} if debug else result

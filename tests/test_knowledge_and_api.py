@@ -1,7 +1,9 @@
 from fastapi.testclient import TestClient
 
+from incident_assistant import cli
 from incident_assistant.agent import IncidentAgent
-from incident_assistant.api import app, get_agent
+from incident_assistant.api import _build_agent, app, get_agent
+from incident_assistant.llm import LLMError
 from incident_assistant.mock_llm import MockLLM
 
 from .conftest import INCIDENT, VALID_PARSE, ScriptedLLM
@@ -13,6 +15,7 @@ def test_retrieval_finds_matching_past_incident(kb):
         ["reporting-service"],
     )
     assert top[0].incident.id == "INC-102"
+
 
 def test_retrieval_drops_weak_noise_match(kb):
     # INC-101 shares only the token "utc" with this report and must not reach the prompt
@@ -27,6 +30,7 @@ def test_retrieval_drops_weak_noise_match(kb):
 def test_retrieval_returns_nothing_for_unrelated_incident(kb):
     text = "Several merchants report they received two identical invoices. No errors in logs, CPU is normal."
     assert kb.similar_incidents(text, []) == []
+
 
 def test_retrieval_auth(kb):
     assert kb.similar_incidents("401 errors, invalid token signatures on login", [])[0].incident.id == "INC-104"
@@ -61,6 +65,40 @@ def test_api_returns_502_when_model_output_never_valid(kb):
         assert len(resp.json()["detail"]["trace"]["stages"][-1]["attempts"]) == 3
     finally:
         app.dependency_overrides.clear()
+
+
+def test_api_returns_503_when_provider_is_down(kb):
+    class Down:
+        name = "down"
+
+        def complete(self, stage, system, messages):
+            raise LLMError("connection refused")
+
+    app.dependency_overrides[get_agent] = lambda: IncidentAgent(Down(), kb)
+    try:
+        assert TestClient(app).post("/triage", json={"text": INCIDENT}).status_code == 503
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_api_returns_503_when_api_key_missing(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "anthropic")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+    monkeypatch.setattr("incident_assistant.config.load_dotenv", lambda: None)  # ignore a local .env
+    _build_agent.cache_clear()
+    try:
+        resp = TestClient(app).post("/triage", json={"text": INCIDENT})
+        assert resp.status_code == 503 and "ANTHROPIC_API_KEY" in resp.json()["detail"]["error"]
+    finally:
+        _build_agent.cache_clear()
+
+
+def test_cli_exit_codes(monkeypatch, capsys):
+    monkeypatch.setattr("incident_assistant.config.load_dotenv", lambda: None)
+    assert cli.main(["--provider", "mock", "   "]) == 1                          # bad input
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+    assert cli.main(["--provider", "anthropic", INCIDENT]) == 1                  # config: no key
+    assert cli.main(["--provider", "mock", INCIDENT]) == 0
 
 
 def test_schema_endpoint():
